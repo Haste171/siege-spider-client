@@ -28,3 +28,5 @@ chmod +x build_match_client.sh
 ```shell
 ./build_match_client.sh
 ```
+
+*Note - if you build the client on a non-Windows platform, pyinstaller will automatically use that platforms executable binary format so the executable will not be cross-compatible to Windows unless you build on Windows.*
