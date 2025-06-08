@@ -1,67 +1,98 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.requests import Request
+from PyQt5.QtWidgets import QApplication, QMainWindow
+from PyQt5.QtWebEngineWidgets import QWebEngineView
+from PyQt5.QtCore import QUrl, QTimer
+import sys
 import json
 import logging
 import requests
 import threading
 import time
 import uvicorn
-import webbrowser
 import websocket
+from queue import Queue
 
+# ---------- Setup ----------
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # Allow all methods including OPTIONS -- overwolf frontend dev client seems to always send a pre-req options request...
-    allow_headers=["*"],  # Allow all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 OVERWOLF_LOCALHOST_URL = "http://localhost:54284/json"
 LOCALHOST_URL = "http://localhost:5172/receive"
 
+url_queue = Queue()
+
+
+# ---------- GUI ----------
+class BrowserWindow(QMainWindow):
+    def __init__(self, url):
+        super().__init__()
+        self.setWindowTitle("Match Viewer")
+
+        self.browser = QWebEngineView()
+        self.browser.load(QUrl(url))
+        self.browser.setZoomFactor(0.8)  # Zoom out slightly (default is 1.0)
+
+        self.setCentralWidget(self.browser)
+        self.resize(1800, 1200)  # Increase window size
+        self.show()
+
+
+
+def launch_browser_window(url):
+    url_queue.put(url)
+
+browser_window = None
+
+
+
+def check_url_queue():
+    global browser_window
+    if not url_queue.empty():
+        url = url_queue.get()
+        if browser_window:
+            browser_window.close()
+        browser_window = BrowserWindow(url)
+        browser_window.show()
+
+
+# ---------- FastAPI Endpoint ----------
 @app.post("/receive")
 async def receiver(request: Request):
     try:
         data = await request.json()
         logger.info(f"Received data: {data}")
 
-        # TODO: Refactor to take list of profile ids as input and do the url building within the endpoint to make the javascript injection simpler and lighter weigh
         if 'content' in data:
             url = data['content']
             logger.info(f"Dashboard URL: {url}")
-
-            # open the URL in the default browser
-            try:
-                webbrowser.open(url)
-                logger.info(f"Opened URL in browser: {url}")
-            except Exception as browser_error:
-                logger.info(f"Failed to open URL in browser: {browser_error}")
+            launch_browser_window(url)
 
         return {"status": "Success!", "received": data, "url_opened": True}
     except Exception as e:
         logger.error(f"Error processing request: {e}")
         return {"status": "Error", "message": str(e)}
 
-def start_server():
-    """Start the FastAPI server in a separate thread"""
-    uvicorn.run("__main__:app", host="0.0.0.0", port=5172, log_level="info")
 
+# ---------- Overwolf Injection ----------
 def inject_javascript():
-    """Inject javascript into overwolf dev tools to intercept rainbow six siege data"""
     try:
         targets = requests.get(OVERWOLF_LOCALHOST_URL).json()
         target_ws_url = next(
             (t["webSocketDebuggerUrl"] for t in targets if t["title"] == "Overwolf GameEvents Provider index"), None)
 
         if target_ws_url:
-            localhost_url = "http://localhost:5172/receive"
-
             ws = websocket.create_connection(target_ws_url)
             js_code = f"""
                 (function() {{
@@ -84,7 +115,7 @@ def inject_javascript():
                                         content: link
                                     }};
 
-                                    fetch("{localhost_url}", {{
+                                    fetch("{LOCALHOST_URL}", {{
                                         method: 'POST',
                                         headers: {{
                                             'Content-Type': 'application/json'
@@ -109,36 +140,30 @@ def inject_javascript():
             return "JavaScript injected successfully."
     except (requests.RequestException, websocket.WebSocketException) as e:
         return f"Error: {e}"
-
     return "Failed to Inject. Overwolf not running?"
 
 
+# ---------- Main ----------
 if __name__ == "__main__":
-    logger.info("Starting local server...")
+    def run_server():
+        inject_result = inject_javascript()
+        logger.info(inject_result)
+        uvicorn.run("__main__:app", host="0.0.0.0", port=5172, log_level="info")
 
-    # Start the server in a separate thread
-    server_thread = threading.Thread(target=start_server, daemon=True)
+    server_thread = threading.Thread(target=run_server, daemon=True)
     server_thread.start()
 
-    # Wait a moment for the server to start
     time.sleep(3)
-    logger.info("Server started. Injecting JavaScript...")
-
-    # Now inject the javascript into overwolf
-    result = inject_javascript()
-    logger.info(result)
-
-    logger.info("\n" + "="*50)
+    logger.info("=" * 50)
     logger.info("JavaScript injected! Server is running...")
     logger.info("Localhost server logs will appear below:")
     logger.info("Press Ctrl+C to exit")
-    logger.info("="*50 + "\n")
+    logger.info("=" * 50 + "\n")
 
-    try:
-        # Keep the main thread alive so we can see FastAPI logs
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        logger.info("\nShutting down server...")
-        logger.info("Goodbye!")
+    qt_app = QApplication(sys.argv)
 
+    timer = QTimer()
+    timer.timeout.connect(check_url_queue)
+    timer.start(500)
+    url_queue.put("https://siege-spider-dashboard.vercel.app")
+    sys.exit(qt_app.exec_())

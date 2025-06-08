@@ -11,6 +11,8 @@ uvicorn = "^0.34.2"
 requests = "^2.32.3"
 websocket-client = "^1.8.0"
 pyinstaller = "^6.13.0"
+pyqt5 = "^5.15.11"
+pyqtwebengine = "^5.15.7"
 
 [tool.poetry.group.dev.dependencies]
 
