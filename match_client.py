@@ -116,7 +116,7 @@ def inject_javascript():
                                         const matchId = data.id;
                                         
                                         // Create the new URL format with the match ID
-                                        const link = `{siege_spider_dashboard_url}/match/${{matchId}}`;
+                                        const link = `{siege_spider_dashboard_url}/lookup/match/${{matchId}}`;
 
                                         // Send the link to the localhost endpoint
                                         const payload = {{
