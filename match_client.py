@@ -1,3 +1,5 @@
+import sys
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.requests import Request
@@ -22,8 +24,12 @@ app.add_middleware(
     allow_headers=["*"],  # Allow all headers
 )
 
+CURRENT_VERSION = "1.0.1"
 OVERWOLF_LOCALHOST_URL = "http://localhost:54284/json"
 LOCALHOST_URL = "http://localhost:5172/receive"
+SIEGE_SPIDER_DASHBOARD_BASE_URL = "https://siege-spider-dashboard.vercel.app"
+SIEGE_SPIDER_API_BASE_URL = "https://siege-spider-api-6d251bf857a7.herokuapp.com"
+
 
 @app.post("/receive")
 async def receiver(request: Request):
@@ -47,6 +53,19 @@ async def receiver(request: Request):
     except Exception as e:
         logger.error(f"Error processing request: {e}")
         return {"status": "Error", "message": str(e)}
+
+def check_version():
+    url = SIEGE_SPIDER_API_BASE_URL + "/client/version"
+    resp = requests.get(url)
+    if resp.status_code == 200:
+        resp = resp.json()
+        if resp.get('current_version') == CURRENT_VERSION:
+            logger.info(f"Loaded client version: {CURRENT_VERSION}")
+        else:
+            outdated_url = SIEGE_SPIDER_DASHBOARD_BASE_URL + "/outdated"
+            webbrowser.open(outdated_url)
+            logger.info("Siege Spider client outdated!")
+            sys.exit(1)
 
 def start_server():
     """Start the FastAPI server in a separate thread"""
@@ -114,6 +133,7 @@ def inject_javascript():
 
 
 if __name__ == "__main__":
+    check_version()
     logger.info("Starting local server...")
 
     # Start the server in a separate thread
