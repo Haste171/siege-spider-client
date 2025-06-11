@@ -37,7 +37,6 @@ async def receiver(request: Request):
         data = await request.json()
         logger.info(f"Received data: {data}")
 
-        # TODO: Refactor to take list of profile ids as input and do the url building within the endpoint to make the javascript injection simpler and lighter weigh
         if 'content' in data:
             url = data['content']
             logger.info(f"Dashboard URL: {url}")
@@ -80,6 +79,8 @@ def inject_javascript():
 
         if target_ws_url:
             localhost_url = "http://localhost:5172/receive"
+            siege_spider_api_base_url = SIEGE_SPIDER_API_BASE_URL
+            siege_spider_dashboard_url = SIEGE_SPIDER_DASHBOARD_BASE_URL
 
             ws = websocket.create_connection(target_ws_url)
             js_code = f"""
@@ -96,19 +97,58 @@ def inject_javascript():
                                         return {{ [p.profile_id]: p.team_id }};
                                     }});
 
-                                    const encoded = encodeURIComponent(JSON.stringify(identifiers));
-                                    const link = "https://siege-spider-dashboard.vercel.app/match?identifiers=" + encoded;
-
-                                    const payload = {{
-                                        content: link
-                                    }};
-
-                                    fetch("{localhost_url}", {{
+                                    // First, call the ingestion endpoint to get the match ID
+                                    fetch("{siege_spider_api_base_url}/ingest/match", {{
                                         method: 'POST',
                                         headers: {{
                                             'Content-Type': 'application/json'
                                         }},
-                                        body: JSON.stringify(payload)
+                                        body: JSON.stringify({{ identifiers: identifiers }})
+                                    }})
+                                    .then(response => {{
+                                        if (!response.ok) {{
+                                            throw new Error(`HTTP error! status: ${{response.status}}`);
+                                        }}
+                                        return response.json();
+                                    }})
+                                    .then(data => {{
+                                        // Extract the match ID from the response
+                                        const matchId = data.id;
+                                        
+                                        // Create the new URL format with the match ID
+                                        const link = `{siege_spider_dashboard_url}/match/${{matchId}}`;
+
+                                        // Send the link to the localhost endpoint
+                                        const payload = {{
+                                            content: link
+                                        }};
+
+                                        return fetch("{localhost_url}", {{
+                                            method: 'POST',
+                                            headers: {{
+                                                'Content-Type': 'application/json'
+                                            }},
+                                            body: JSON.stringify(payload)
+                                        }});
+                                    }})
+                                    .then(response => {{
+                                        console.log('Successfully sent match link to localhost');
+                                    }})
+                                    .catch(error => {{
+                                        console.error('Error processing match data:', error);
+                                        
+                                        // Fallback: send error information to localhost
+                                        const errorPayload = {{
+                                            content: `Error processing match: ${{error.message}}`
+                                        }};
+                                        
+                                        fetch("{localhost_url}", {{
+                                            method: 'POST',
+                                            headers: {{
+                                                'Content-Type': 'application/json'
+                                            }},
+                                            body: JSON.stringify(errorPayload)
+                                        }});
                                     }});
                                 }}
                             }} catch (e) {{
@@ -130,7 +170,6 @@ def inject_javascript():
         return f"Error: {e}"
 
     return "Failed to Inject. Overwolf not running?"
-
 
 if __name__ == "__main__":
     check_version()
