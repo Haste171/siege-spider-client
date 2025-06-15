@@ -11,8 +11,8 @@ import websocket
 CURRENT_VERSION = "1.0.2"
 OVERWOLF_LOCALHOST_URL = "http://localhost:54284/json"
 LOCALHOST_URL = "http://localhost:5172/receive"
-SIEGE_SPIDER_DASHBOARD_BASE_URL = "https://siege-spider-dashboard.vercel.app"
-SIEGE_SPIDER_API_BASE_URL = "https://siege-spider-api-6d251bf857a7.herokuapp.com"
+SIEGE_SPIDER_DASHBOARD_BASE_URL = "https://siegespider.cc"
+SIEGE_SPIDER_API_BASE_URL = "https://api.siegespider.cc"
 
 def check_version():
     url = SIEGE_SPIDER_API_BASE_URL + "/client/version"
@@ -126,10 +126,7 @@ def inject_javascript():
                     }}
                 }};
             }})();
-        """.format(
-            siege_spider_api_base_url=siege_spider_api_base_url,
-            siege_spider_dashboard_url=siege_spider_dashboard_url,
-        )
+        """
 
         js_code = js_code.format(
             siege_spider_api_base_url=siege_spider_api_base_url,
