@@ -7,7 +7,7 @@ Siege spider is a **free** [Rainbow Six Siege](https://www.google.com/search?q=T
 
 # Links
 
-You are currently looing at the **UI**.
+You are currently looing at the **client**.
 
 - API: https://github.com/Haste171/siege-spider-api
 - UI: https://github.com/Haste171/siege-spider-dashboard
